@@ -1,13 +1,14 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 
-import { combineLatest, Observable, throwError } from 'rxjs';
-import { catchError, map, tap } from 'rxjs/operators';
+import { BehaviorSubject, combineLatest, merge, Observable, throwError } from 'rxjs';
+import { catchError, map, scan, tap } from 'rxjs/operators';
 
 import { Product } from './product';
 import { Supplier } from '../suppliers/supplier';
 import { SupplierService } from '../suppliers/supplier.service';
 import { ProductCategoryService } from '../product-categories/product-category.service'
+import { Subject, SubjectSubscriber } from 'rxjs/internal/Subject';
 
 @Injectable({
   providedIn: 'root'
@@ -36,12 +37,45 @@ export class ProductService {
 
     )
   );
+
+  private productSelectedSubject = new BehaviorSubject<number>(0);
+  productSelectedAction$ = this.productSelectedSubject.asObservable();
+
   
+  selectedProduct$ = combineLatest([
+    this.productsWithCategory$,
+    this.productSelectedAction$
+  ]) 
+    .pipe(
+      map(([products, selectedProductId]) =>
+      products.find(product => product.id === selectedProductId)
+      ),
+      tap(product => console.log('selectedProduct', product))
+    );
   
+   private productInsertedSubject = new Subject<Product>();
+   productInsertedAction$ = this.productInsertedSubject.asObservable();
+
+   productsWithAdd$ = merge(
+     this.productsWithCategory$,
+     this.productInsertedAction$
+   )
+   .pipe(
+     scan((acc: Product[], value:Product) => [...acc, value])
+   );
+    
   constructor(private http: HttpClient,
               private productCategoryService: ProductCategoryService,
               private supplierService: SupplierService) { }
 
+  selectedProductChanged(selectedProductId: number): void {
+    this.productSelectedSubject.next(selectedProductId);
+  }
+
+  addProduct(newProduct?: Product) {
+    newProduct = newProduct || this.fakeProduct();
+    this.productInsertedSubject.next(newProduct);
+  }
 
 
   private fakeProduct(): Product {
